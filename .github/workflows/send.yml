@@ -1,0 +1,49 @@
+name: 文章更新邮件通知
+
+on:
+  schedule:
+    # 每天 UTC 4:00 = 北京时间 12:00（中午）
+    - cron: "0 4 * * *"
+  workflow_dispatch:  # 允许手动触发
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 设置 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 恢复 link.txt 缓存
+        uses: actions/cache@v4
+        with:
+          path: link.txt
+          key: rss-sent-link-cache
+          restore-keys: |
+            rss-sent-link-cache
+
+      - name: 安装依赖
+        run: pip install -r requirements.txt
+
+      - name: 运行发送脚本
+        env:
+          SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          SMTP_FROM_NAME: ${{ secrets.SMTP_FROM_NAME }}
+          SMTP_FROM_ADDR: ${{ secrets.SMTP_FROM_ADDR }}
+          SMTP_SUBJECT: ${{ secrets.SMTP_SUBJECT }}
+          RSS_URL: ${{ secrets.RSS_URL }}
+          EMAIL_LIST: ${{ secrets.EMAIL_LIST }}
+          TAG_TITLE: ${{ secrets.TAG_TITLE }}
+          TAG_SUMMARY: ${{ secrets.TAG_SUMMARY }}
+          TAG_LINK: ${{ secrets.TAG_LINK }}
+          LINK_TEXT: ${{ secrets.LINK_TEXT }}
+        run: python send_update.py

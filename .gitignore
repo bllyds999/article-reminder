@@ -1,0 +1,8 @@
+.deepseek/
+.venv/
+atom.xml
+demo.html
+link.txt
+serects.txt
+smtp.txt
+__pycache__/
