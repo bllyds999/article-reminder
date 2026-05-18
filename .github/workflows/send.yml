@@ -2,8 +2,8 @@ name: 文章更新邮件通知
 
 on:
   schedule:
-    # 每天 UTC 4:00 = 北京时间 12:00（中午）
-    - cron: "0 4 * * *"
+    # 北京时间 12:00（中午）
+    - cron: "0 12 * * *"
   workflow_dispatch:  # 允许手动触发
 
 jobs:
