@@ -16,6 +16,7 @@ import sys
 import re
 import smtplib
 import ssl
+import time
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.utils import formataddr
@@ -199,6 +200,8 @@ def main():
     save_sent_link(link)
     sent_links.add(link)
     new_count += 1
+    # 遵守 SMTP 速率限制（Resend: 2 封/秒），发送间隔 0.6 秒
+    time.sleep(0.6)
 
   print(f"完成。本次共发送 {new_count} 篇新文章")
   if new_count == 0:
