@@ -46,4 +46,5 @@ jobs:
           TAG_SUMMARY: ${{ secrets.TAG_SUMMARY }}
           TAG_LINK: ${{ secrets.TAG_LINK }}
           LINK_TEXT: ${{ secrets.LINK_TEXT }}
+          UNSUBSCRIBE_EMAIL: ${{ secrets.UNSUBSCRIBE_EMAIL }}
         run: python send_update.py

@@ -43,28 +43,30 @@ SMTP_SUBJECT  = _env("SMTP_SUBJECT")      # 他说，你收到了新的订阅
 RSS_URL     = _env("RSS_URL")         # https://090909.top/atom.xml
 EMAIL_LIST  = _env("EMAIL_LIST")        # 空格分隔的密送邮箱列表
 
-TAG_TITLE   = _env("TAG_TITLE", "h1")     # 标题标签名
+TAG_TITLE   = _env("TAG_TITLE", "h1")       # 标题标签名
 TAG_SUMMARY   = _env("TAG_SUMMARY", "p")    # 摘要标签名
-TAG_LINK    = _env("TAG_LINK", "a")       # 链接标签名
+TAG_LINK    = _env("TAG_LINK", "a")         # 链接标签名
 LINK_TEXT   = _env("LINK_TEXT", "阅读详情")  # 链接显示文字
 
-LINK_FILE   = "link.txt"             # 缓存已发送链接的文件
+UNSUBSCRIBE_EMAIL = _env("UNSUBSCRIBE_EMAIL", "")  # 退订邮箱（可选）
+
+LINK_FILE   = "link.txt"                      # 缓存已发送链接的文件（每行一个）
 
 
 # ── 工具函数 ────────────────────────────────────────────────
 
-def load_last_link():
-  """读取上次发送的文章链接，如果文件不存在或为空则返回 None。"""
+def load_sent_links():
+  """读取所有已发送的文章链接（每行一个），返回集合。"""
   if not os.path.exists(LINK_FILE):
-    return None
+    return set()
   with open(LINK_FILE, "r", encoding="utf-8") as f:
-    content = f.read().strip()
-  return content if content else None
+    links = {line.strip() for line in f if line.strip()}
+  return links
 
 
-def save_last_link(link):
-  """将本次发送的文章链接写入缓存文件。"""
-  with open(LINK_FILE, "w", encoding="utf-8") as f:
+def save_sent_link(link):
+  """将新发送的链接追加到缓存文件。"""
+  with open(LINK_FILE, "a", encoding="utf-8") as f:
     f.write(link.strip() + "\n")
   print(f"已记录发送链接: {link}")
 
@@ -88,6 +90,13 @@ def build_html_content(title, summary, link):
     f'<{TAG_SUMMARY}>{summary}</{TAG_SUMMARY}>',
     f'<{TAG_LINK} href="{link}">{LINK_TEXT}</{TAG_LINK}>',
   ]
+  if UNSUBSCRIBE_EMAIL:
+    parts.append(
+      f'<hr><p style="color:#888;font-size:12px;">'
+      f'如不希望收到此类邮件，请联系退订：'
+      f'<a href="mailto:{UNSUBSCRIBE_EMAIL}">{UNSUBSCRIBE_EMAIL}</a>'
+      f'</p>'
+    )
   return "\n".join(parts)
 
 
@@ -101,6 +110,12 @@ def build_plain_content(title, summary, link):
     "",
     f"{LINK_TEXT}: {link}",
   ]
+  if UNSUBSCRIBE_EMAIL:
+    lines.extend([
+      "",
+      "---",
+      f"如不希望收到此类邮件，请联系退订：{UNSUBSCRIBE_EMAIL}",
+    ])
   return "\n".join(lines)
 
 
@@ -113,6 +128,7 @@ def send_email(html_body, plain_body, bcc_list):
   msg["From"] = formataddr((SMTP_FROM_NAME, SMTP_FROM_ADDR))
   msg["To"] = formataddr((SMTP_FROM_NAME, SMTP_FROM_ADDR))
   msg["Subject"] = SMTP_SUBJECT
+  msg["List-Unsubscribe"] = f"<mailto:{UNSUBSCRIBE_EMAIL}>" if UNSUBSCRIBE_EMAIL else ""
 
   msg.attach(MIMEText(plain_body, "plain", "utf-8"))
   msg.attach(MIMEText(html_body, "html", "utf-8"))
@@ -154,36 +170,39 @@ def main():
     print("RSS 中没有文章，退出")
     sys.exit(0)
 
-  # 3. 获取最新文章
-  latest = feed.entries[0]
-  title = latest.get("title", "").strip()
-  summary = latest.get("summary", "").strip()
-  link = latest.get("link", "").strip()
+  # 3. 读取已发送记录
+  sent_links = load_sent_links()
+  print(f"已发送记录: {len(sent_links)} 篇")
 
-  if not title or not link:
-    print("错误: 最新文章缺少标题或链接")
-    sys.exit(1)
+  # 4. 遍历所有文章，逐篇判断并发送
+  new_count = 0
+  for entry in feed.entries:
+    title = entry.get("title", "").strip()
+    summary = entry.get("summary", "").strip()
+    link = entry.get("link", "").strip()
 
-  print(f"最新文章: 《{title}》")
-  print(f"链接: {link}")
+    if not title or not link:
+      print(f"跳过缺少标题或链接的条目")
+      continue
 
-  # 4. 检查是否已发送
-  last_link = load_last_link()
-  if last_link == link:
-    print("该文章已发送过，跳过。")
+    if link in sent_links:
+      print(f"已发送过: 《{title}》，跳过")
+      continue
+
+    # 未发送 → 逐篇发信
+    print(f"新文章: 《{title}》 — {link}")
+
+    html_body = build_html_content(title, summary, link)
+    plain_body = build_plain_content(title, summary, link)
+
+    send_email(html_body, plain_body, bcc_list)
+    save_sent_link(link)
+    sent_links.add(link)
+    new_count += 1
+
+  print(f"完成。本次共发送 {new_count} 篇新文章")
+  if new_count == 0:
     sys.exit(0)
-
-  # 5. 构建邮件内容
-  html_body = build_html_content(title, summary, link)
-  plain_body = build_plain_content(title, summary, link)
-
-  # 6. 发送邮件
-  send_email(html_body, plain_body, bcc_list)
-
-  # 7. 记录已发送
-  save_last_link(link)
-
-  print("完成。")
 
 
 if __name__ == "__main__":
